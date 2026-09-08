@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Test-mottaker for fake edge-agent.
+"""Test receiver for the fake edge-agent.
 
-Liten HTTP-server (kun stdlib) som tar imot POST fra agent.py, lagrer bildet
-under received/ og skriver GPS-dataene til konsollen. Bytt den ut med den
-ekte backend-URL-en nar den finnes.
+A small stdlib-only HTTP server that accepts the POST from agent.py, stores
+the image under received/ and prints the GPS data. Replace it with the real
+backend URL once that exists.
 
-Bruk:
+Usage:
     python receiver.py --port 8000
 """
 
@@ -23,7 +23,7 @@ OUTPUT_DIR = Path(__file__).parent / "received"
 
 
 def parse_multipart(content_type: str, body: bytes) -> tuple[dict[str, str], list[tuple[str, bytes]]]:
-    """Del opp multipart-body i tekstfelter og filer."""
+    """Split a multipart body into text fields and files."""
     message = BytesParser(policy=default_policy).parsebytes(
         b"Content-Type: " + content_type.encode() + b"\r\nMIME-Version: 1.0\r\n\r\n" + body
     )
@@ -45,15 +45,15 @@ def parse_multipart(content_type: str, body: bytes) -> tuple[dict[str, str], lis
 class IngestHandler(BaseHTTPRequestHandler):
     server_version = "SharkDroneTestReceiver/1.0"
 
-    def do_POST(self) -> None:  # noqa: N802 - navnet er gitt av stdlib
+    def do_POST(self) -> None:  # noqa: N802 - name is dictated by stdlib
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)
         content_type = self.headers.get("Content-Type", "")
 
         try:
             fields, files = parse_multipart(content_type, body)
-        except Exception as exc:  # noqa: BLE001 - testverktoy, vil bare se feilen
-            self._respond(400, {"error": f"kunne ikke lese multipart: {exc}"})
+        except Exception as exc:  # noqa: BLE001 - test tool, we just want to see the error
+            self._respond(400, {"error": f"could not parse multipart: {exc}"})
             return
 
         OUTPUT_DIR.mkdir(exist_ok=True)
@@ -64,9 +64,9 @@ class IngestHandler(BaseHTTPRequestHandler):
             target.write_bytes(data)
             saved.append(target.name)
 
-        print(f"[{stamp}] mottatt {fields.get('device_id', '?')} "
+        print(f"[{stamp}] received {fields.get('device_id', '?')} "
               f"lat={fields.get('lat')} lon={fields.get('lon')} "
-              f"alt={fields.get('altitude_m')}m -> {', '.join(saved) or 'ingen fil'}",
+              f"alt={fields.get('altitude_m')}m -> {', '.join(saved) or 'no file'}",
               flush=True)
 
         self._respond(200, {"status": "ok", "saved": saved})
@@ -83,22 +83,22 @@ class IngestHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def log_message(self, *args) -> None:
-        pass  # Vi skriver var egen, kortere logglinje i do_POST.
+        pass  # We print our own, shorter log line in do_POST.
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Test-mottaker for fake edge-agent")
+    parser = argparse.ArgumentParser(description="Test receiver for the fake edge-agent")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
     server = ThreadingHTTPServer((args.host, args.port), IngestHandler)
-    print(f"Mottaker lytter pa http://{args.host}:{args.port}/ingest "
-          f"(lagrer i {OUTPUT_DIR}/) - Ctrl+C for a stoppe")
+    print(f"Receiver listening on http://{args.host}:{args.port}/ingest "
+          f"(saving to {OUTPUT_DIR}/) - Ctrl+C to stop")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nStoppet.")
+        print("\nStopped.")
     return 0
 
 

@@ -3,7 +3,3 @@ __pycache__/
 .venv/
 venv/
 received/
-images/*.jpg
-images/*.jpeg
-images/*.png
-!images/.gitkeep

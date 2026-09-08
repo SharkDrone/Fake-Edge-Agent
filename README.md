@@ -1,60 +1,84 @@
-# Fake Edge-Agent (SharkDrone, steg 1)
+# Fake Edge-Agent (SharkDrone, step 1)
 
-Et Python-script som hvert 10. sekund sender et tilfeldig bilde fra `images/`
-sammen med falsk GPS til en URL. Ingen AI, ingen tredjepartspakker - kun stdlib,
-sa det kjorer med `python agent.py` rett ut av boksen.
+A Python script that every 10 seconds sends a random image from `images/`
+together with fake GPS to a URL. No AI - this is only the transport half of
+the pipeline.
 
-## Kom i gang
+## Getting started
 
 ```bash
-python tools/make_sample_images.py          # lager 5 testbilder i images/ (krever Pillow)
-python receiver.py --port 8000              # terminal 1: test-mottaker
-python agent.py --url http://localhost:8000/ingest   # terminal 2: agenten
+pip install -r requirements.txt
+python receiver.py --port 8000                       # terminal 1: test receiver
+python agent.py --url http://localhost:8000/ingest   # terminal 2: the agent
 ```
 
-Agenten skriver en linje per vellykket sending:
+Put your images in `images/` (jpg, jpeg, png, webp, bmp, gif). The agent picks
+one at random for every send and writes one line per successful send:
 
 ```
-sendt  #1  sample_01.jpg  59.894019,10.617978  14 kB  -> HTTP 200 {"status": "ok", ...}
+sent  #1  shark_04.jpg  -28.090008,153.451967  10 kB  -> HTTP 200 {"status": "ok", ...}
 ```
-
-Legg gjerne inn dine egne bilder i `images/` (jpg, jpeg, png, webp, bmp, gif).
 
 ## agent.py
 
-| Flagg | Standard | Beskrivelse |
+| Flag | Default | Description |
 | --- | --- | --- |
-| `--url` | `http://localhost:8000/ingest` | URL som bilde + GPS postes til |
-| `--images-dir` | `./images` | Mappe med bilder |
-| `--interval` | `10` | Sekunder mellom hver sending |
-| `--count` | `0` | Antall sendinger, 0 = kjor til Ctrl+C |
-| `--device-id` | `drone-001` | Id for denne "dronen" |
-| `--lat` / `--lon` | Oslofjorden | Startposisjon for GPS-sporet |
-| `--timeout` | `15` | HTTP-timeout i sekunder |
+| `--url` | `http://localhost:8000/ingest` | URL the image + GPS is posted to |
+| `--images-dir` | `./images` | Folder holding the images to send |
+| `--interval` | `10` | Seconds between sends |
+| `--count` | `0` | Number of sends, 0 = run until Ctrl+C |
+| `--device-id` | `drone-001` | Identifier for this "drone" |
+| `--lat` / `--lon` | `-28.0890, 153.4520` | Shoreline anchor the patrol area hangs off |
+| `--shore-bearing` | `339` | Compass bearing of the coastline; water is 90 deg clockwise |
+| `--altitude` | `50` | Nominal flight altitude in metres |
+| `--speed` | `6` | Patrol speed in metres per second |
+| `--timeout` | `15` | HTTP timeout in seconds |
 
-Exit-kode er 0 nar alt gikk gjennom, 2 hvis minst en sending feilet.
+Exit code is 0 when everything went through, 2 if at least one send failed.
 
-## Hva som sendes
+## What gets sent
 
-En `POST` med `multipart/form-data`:
+A `POST` with `multipart/form-data`:
 
-- `image` - selve bildefilen
+- `image` - the image file itself
 - `device_id`, `captured_at` (UTC ISO-8601), `frame_id`
-- `lat`, `lon`, `altitude_m`, `heading_deg`, `speed_mps`, `accuracy_m`
-- `metadata` - de samme GPS-feltene samlet som JSON, for mottakere som vil ha det slik
+- `lat`, `lon`, `altitude_m`, `heading_deg`, `speed_mps`, `accuracy_m`, `offshore_m`
+- `metadata` - the same GPS fields bundled as JSON, for receivers that prefer that
 
-GPS-en er en random walk: agenten starter i startposisjonen og driver videre med
-liten kursendring for hvert steg, sa sporet ser ut som en drone i bevegelse
-framfor tilfeldige punkter spredt utover kartet.
+## Flight area
+
+The drone patrols the water off Burleigh Beach, Gold Coast - it never flies
+over the sand. Positions are generated in a local metre frame rotated onto the
+coastline, so `along` runs parallel to the beach and `across` points straight
+out to sea. The walk bounces off the edges of a patrol box:
+
+- **80 - 600 m offshore** - the lower bound is what keeps it off the beach
+- **1.7 km along the beach**, from just north of Burleigh Heads headland
+
+A plain lat/lon random walk cannot promise this; given enough steps it drifts
+onto land. Working in the rotated frame means the box follows the angle of the
+coast for free.
+
+The coordinates are approximate. Before you trust the track, paste a corner
+into Google Maps and check it lands in the sea:
+
+```
+-28.09042, 153.45349      -28.07449, 153.45223
+```
+
+To move or reshape the area, use `--lat` / `--lon` (shoreline anchor) and
+`--shore-bearing`, or edit `ALONGSHORE_RANGE_M` / `OFFSHORE_RANGE_M` in
+[agent.py](agent.py).
 
 ## receiver.py
 
-Test-mottaker som lagrer innkommende bilder i `received/` og logger GPS-en.
-Den er kun et stillas for lokal testing - nar den ekte backend-en finnes,
-peker du `--url` dit i stedet.
+A local test receiver: a small HTTP server that accepts the agent's POST,
+stores the image under `received/` and logs the GPS. It is scaffolding for
+testing on your own machine, not part of the product - once the real backend
+exists, point `--url` at that instead.
 
-## Neste steg
+## Next steps
 
-Steg 2 er a bytte test-mottakeren mot den ekte backend-en (og deretter legge
-AI-en inn i pipelinen). Agenten selv trenger ingen endringer for det - bare en
-ny `--url`.
+Step 2 is swapping the test receiver for the real backend (and after that,
+putting the AI into the pipeline). The agent itself needs no changes for that -
+only a new `--url`.
