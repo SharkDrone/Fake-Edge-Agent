@@ -76,9 +76,3 @@ A local test receiver: a small HTTP server that accepts the agent's POST,
 stores the image under `received/` and logs the GPS. It is scaffolding for
 testing on your own machine, not part of the product - once the real backend
 exists, point `--url` at that instead.
-
-## Next steps
-
-Step 2 is swapping the test receiver for the real backend (and after that,
-putting the AI into the pipeline). The agent itself needs no changes for that -
-only a new `--url`.
