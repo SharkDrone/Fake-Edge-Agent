@@ -14,13 +14,15 @@ import argparse
 import json
 import math
 import mimetypes
+import os
 import random
 import sys
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-
+from dotenv import load_dotenv
+load_dotenv()
 import requests
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
@@ -184,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     # One session keeps the TCP connection alive between sends.
     with requests.Session() as session:
         session.headers["User-Agent"] = "sharkdrone-fake-edge-agent/1.0"
+        session.headers["X-Api-Key"] = os.environ["EDGE_API_KEY"]
         try:
             while args.count == 0 or sent + failed < args.count:
                 image = random.choice(images)
